@@ -38,9 +38,13 @@ DAILY_QUOTES = [
 
 
 def _location() -> tuple[float, float, str]:
-    lat = float(os.environ.get("WEATHER_LAT", DEFAULT_LAT))
-    lon = float(os.environ.get("WEATHER_LON", DEFAULT_LON))
-    name = os.environ.get("WEATHER_LOCATION_NAME", DEFAULT_LOCATION_NAME).strip() or DEFAULT_LOCATION_NAME
+    lat_raw = str(os.environ.get("WEATHER_LAT", "")).strip()
+    lon_raw = str(os.environ.get("WEATHER_LON", "")).strip()
+    name_raw = str(os.environ.get("WEATHER_LOCATION_NAME", "")).strip()
+
+    lat = float(lat_raw) if lat_raw else DEFAULT_LAT
+    lon = float(lon_raw) if lon_raw else DEFAULT_LON
+    name = name_raw or DEFAULT_LOCATION_NAME
     return lat, lon, name
 
 
@@ -115,4 +119,3 @@ def format_weather_briefing(weather: dict) -> str:
 
 def get_daily_motivation() -> str:
     return DAILY_QUOTES[now_kst().toordinal() % len(DAILY_QUOTES)]
-
