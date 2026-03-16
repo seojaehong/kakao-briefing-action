@@ -9,14 +9,19 @@ MAX_KAKAO_TEXT = 1950
 
 
 def refresh_access_token() -> str:
+    rest_api_key = os.environ["KAKAO_REST_API_KEY"].strip()
+    refresh_token = os.environ["KAKAO_REFRESH_TOKEN"].strip()
+    client_secret = os.environ["KAKAO_CLIENT_SECRET"].strip()
+
     data = {
         "grant_type": "refresh_token",
-        "client_id": os.environ["KAKAO_REST_API_KEY"],
-        "refresh_token": os.environ["KAKAO_REFRESH_TOKEN"],
-        "client_secret": os.environ["KAKAO_CLIENT_SECRET"],
+        "client_id": rest_api_key,
+        "refresh_token": refresh_token,
+        "client_secret": client_secret,
     }
     response = requests.post("https://kauth.kakao.com/oauth/token", data=data, timeout=10)
-    response.raise_for_status()
+    if not response.ok:
+        raise RuntimeError(f"카카오 토큰 갱신 실패: HTTP {response.status_code} - {response.text}")
     payload = response.json()
     if "error" in payload:
         raise RuntimeError(f"카카오 토큰 갱신 실패: {payload.get('error_description', payload['error'])}")
