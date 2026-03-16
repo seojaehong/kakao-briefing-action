@@ -12,6 +12,25 @@ from modules.common import KST
 from modules.gmail import build_mail_briefing
 from modules.weather import fetch_today_weather, format_weather_briefing, get_daily_motivation
 
+SEPARATOR = "\n" + "─" * 30 + "\n"
+SINGLE_MESSAGE_TARGET = 1750
+
+
+def _compact_mail_text(mail_text: str) -> str:
+    marker = "\n\n고객사 현황:\n"
+    if marker in mail_text:
+        return mail_text.split(marker, 1)[0].rstrip()
+    return mail_text
+
+
+def _join_sections(header: str, sections: list[str], now_str: str, include_motivation: bool) -> str:
+    body = SEPARATOR.join(section for section in sections if section)
+    text = f"{header} {now_str}" + SEPARATOR + body
+    if include_motivation:
+        text += f"\n\n한마디: {get_daily_motivation()}"
+    text += f"\n\n발송 시각: {now_str} (KST)"
+    return text
+
 
 def build_full_briefing(mode: str = "am", now: datetime | None = None) -> str:
     now = now or datetime.now(KST)
@@ -36,17 +55,14 @@ def build_full_briefing(mode: str = "am", now: datetime | None = None) -> str:
     except Exception as exc:
         mail_text = f"📧 업무 메일 요약 생성 실패: {exc}"
 
-    separator = "\n" + "─" * 30 + "\n"
     header = "[노무법인 위너스 업무 브리핑]" if mode == "am" else "[노무법인 위너스 오후 업무 브리핑]"
-    return (
-        f"{header} {now_str}"
-        + separator
-        + weather_text
-        + separator
-        + calendar_text
-        + separator
-        + mail_text
-        + f"\n\n한마디: {get_daily_motivation()}"
-        + f"\n\n발송 시각: {now_str} (KST)"
-    )
 
+    full_text = _join_sections(header, [weather_text, calendar_text, mail_text], now_str, include_motivation=True)
+    if len(full_text) <= SINGLE_MESSAGE_TARGET:
+        return full_text
+
+    compact_text = _join_sections(header, [calendar_text, _compact_mail_text(mail_text)], now_str, include_motivation=False)
+    if len(compact_text) <= SINGLE_MESSAGE_TARGET:
+        return compact_text
+
+    return compact_text
