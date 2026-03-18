@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
       KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
       KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
@@ -41,7 +41,7 @@ jobs:
       - name: Validate required secrets
         shell: bash
         run: |
-          for name in GOOGLE_TOKEN_JSON OPENAI_API_KEY KAKAO_REST_API_KEY KAKAO_REFRESH_TOKEN KAKAO_CLIENT_SECRET; do
+          for name in GOOGLE_TOKEN_JSON ANTHROPIC_API_KEY KAKAO_REST_API_KEY KAKAO_REFRESH_TOKEN KAKAO_CLIENT_SECRET; do
             if [ -z "${!name}" ]; then
               echo "Missing secret: $name"
               exit 1

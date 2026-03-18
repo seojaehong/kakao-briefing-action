@@ -13,7 +13,21 @@ def get_calendar_service():
     return build("calendar", "v3", credentials=build_google_credentials())
 
 
-def _normalize_event(event: dict) -> dict:
+def _calendar_targets() -> list[dict]:
+    items = get_calendar_service().calendarList().list().execute().get("items", [])
+    targets = []
+    for item in items:
+        targets.append(
+            {
+                "id": item.get("id"),
+                "name": item.get("summary", item.get("id", "캘린더")),
+                "primary": bool(item.get("primary")),
+            }
+        )
+    return targets
+
+
+def _normalize_event(event: dict, calendar_name: str, calendar_id: str) -> dict:
     start = event.get("start", {})
     end = event.get("end", {})
 
@@ -22,9 +36,17 @@ def _normalize_event(event: dict) -> dict:
         end_at = datetime.fromisoformat(end["dateTime"]).astimezone(KST)
         time_label = f"{start_at.strftime('%H:%M')} ~ {end_at.strftime('%H:%M')}"
         is_all_day = False
+        span_start = start_at.date()
+        span_end = start_at.date()
     else:
         start_at = datetime.fromisoformat(start["date"]).replace(tzinfo=KST)
-        time_label = "종일"
+        end_date = datetime.fromisoformat(end["date"]).replace(tzinfo=KST).date()
+        span_start = start_at.date()
+        span_end = end_date - timedelta(days=1)
+        if span_end > span_start:
+            time_label = f"종일 ({span_start.strftime('%m/%d')}~{span_end.strftime('%m/%d')})"
+        else:
+            time_label = "종일"
         is_all_day = True
 
     return {
@@ -35,6 +57,10 @@ def _normalize_event(event: dict) -> dict:
         "is_all_day": is_all_day,
         "start_at": start_at,
         "date": start_at.date(),
+        "span_start": span_start,
+        "span_end": span_end,
+        "calendar_name": calendar_name,
+        "calendar_id": calendar_id,
     }
 
 
@@ -42,21 +68,27 @@ def fetch_period_events(days_ahead: int = 2, max_results: int = 80) -> list[dict
     now = now_kst()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     period_end = today_start + timedelta(days=days_ahead)
+    service = get_calendar_service()
+    all_events: list[dict] = []
 
-    result = (
-        get_calendar_service()
-        .events()
-        .list(
-            calendarId="primary",
-            timeMin=today_start.isoformat(),
-            timeMax=period_end.isoformat(),
-            singleEvents=True,
-            orderBy="startTime",
-            maxResults=max_results,
+    for calendar in _calendar_targets():
+        result = (
+            service.events()
+            .list(
+                calendarId=calendar["id"],
+                timeMin=today_start.isoformat(),
+                timeMax=period_end.isoformat(),
+                singleEvents=True,
+                orderBy="startTime",
+                maxResults=max_results,
+            )
+            .execute()
         )
-        .execute()
-    )
-    return [_normalize_event(item) for item in result.get("items", [])]
+        for item in result.get("items", []):
+            all_events.append(_normalize_event(item, calendar["name"], calendar["id"]))
+
+    all_events.sort(key=lambda event: event["start_at"])
+    return all_events
 
 
 def should_include_weekly_briefing(now: datetime | None = None) -> bool:
@@ -65,7 +97,12 @@ def should_include_weekly_briefing(now: datetime | None = None) -> bool:
 
 
 def _format_event_line(event: dict) -> str:
-    parts = [f"• {'[종일]' if event['is_all_day'] else event['time']}  {event['title']}"]
+    title = event["title"]
+    calendar_name = event.get("calendar_name", "")
+    calendar_id = event.get("calendar_id", "")
+    if calendar_name and not calendar_id.startswith("iceamericano9@gmail.com") and calendar_name != "iceamericano9@gmail.com":
+        title = f"[{calendar_name}] {title}"
+    parts = [f"• {'[종일]' if event['is_all_day'] else event['time']}  {title}"]
     if event["location"]:
         parts.append(f"📍{event['location']}")
     if event["attendees_count"] > 0:
@@ -78,8 +115,8 @@ def format_calendar_briefing(events: list[dict], now: datetime | None = None) ->
     today = now.date()
     tomorrow = today + timedelta(days=1)
 
-    today_events = [event for event in events if event["date"] == today]
-    tomorrow_events = [event for event in events if event["date"] == tomorrow]
+    today_events = [event for event in events if event.get("span_start", event["date"]) <= today <= event.get("span_end", event["date"])]
+    tomorrow_events = [event for event in events if event.get("span_start", event["date"]) <= tomorrow <= event.get("span_end", event["date"])]
 
     if not today_events and not tomorrow_events:
         date_label = now.strftime(f"%m월 %d일 ({WEEKDAY_KO[now.weekday()]})")
@@ -103,8 +140,13 @@ def format_weekly_briefing(events: list[dict], now: datetime | None = None) -> s
 
     grouped: dict = defaultdict(list)
     for event in events:
-        if week_start <= event["date"] <= week_end:
-            grouped[event["date"]].append(event)
+        span_start = event.get("span_start", event["date"])
+        span_end = event.get("span_end", event["date"])
+        current = max(span_start, week_start)
+        last = min(span_end, week_end)
+        while current <= last:
+            grouped[current].append(event)
+            current += timedelta(days=1)
 
     if not grouped:
         return f"🗓 이번 주 일정 요약 ({week_start.strftime('%m/%d')}~{week_end.strftime('%m/%d')})\n\n등록된 일정이 없습니다."
@@ -118,4 +160,3 @@ def format_weekly_briefing(events: list[dict], now: datetime | None = None) -> s
             lines.append(f"• 그 외 {len(grouped[date_key]) - 4}건")
         lines.append("")
     return "\n".join(lines).strip()
-

@@ -31,6 +31,8 @@ def test_format_weekly_briefing_groups_by_date():
             "attendees_count": 2,
             "is_all_day": False,
             "date": datetime(2026, 3, 16, tzinfo=KST).date(),
+            "span_start": datetime(2026, 3, 16, tzinfo=KST).date(),
+            "span_end": datetime(2026, 3, 16, tzinfo=KST).date(),
         },
         {
             "title": "서류 검토",
@@ -39,6 +41,8 @@ def test_format_weekly_briefing_groups_by_date():
             "attendees_count": 0,
             "is_all_day": True,
             "date": datetime(2026, 3, 17, tzinfo=KST).date(),
+            "span_start": datetime(2026, 3, 17, tzinfo=KST).date(),
+            "span_end": datetime(2026, 3, 17, tzinfo=KST).date(),
         },
     ]
     text = format_weekly_briefing(events, now=now)
@@ -46,3 +50,23 @@ def test_format_weekly_briefing_groups_by_date():
     assert "고객사 상담" in text
     assert "서류 검토" in text
 
+
+def test_format_calendar_briefing_includes_multi_day_all_day_event_on_following_days():
+    now = datetime(2026, 3, 18, 9, 0, tzinfo=KST)
+    events = [
+        {
+            "title": "감사 일정 - 분당구 야탑동",
+            "time": "종일 (03/17~03/19)",
+            "location": "",
+            "attendees_count": 0,
+            "is_all_day": True,
+            "date": datetime(2026, 3, 17, tzinfo=KST).date(),
+            "span_start": datetime(2026, 3, 17, tzinfo=KST).date(),
+            "span_end": datetime(2026, 3, 19, tzinfo=KST).date(),
+            "calendar_name": "가정의평화",
+            "calendar_id": "family-calendar",
+        }
+    ]
+    text = format_calendar_briefing(events, now=now)
+    assert "감사 일정 - 분당구 야탑동" in text
+    assert "가정의평화" in text

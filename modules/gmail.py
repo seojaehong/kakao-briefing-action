@@ -184,8 +184,6 @@ def summarize_emails(email_list: list[dict]) -> str:
     if not email_list:
         return "📧 업무 메일 요약\n\n오늘 확인할 신규 업무 메일이 없습니다."
 
-    model = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     prompt = f"""당신은 노무법인 담당자의 업무 브리핑 비서입니다.
 아래 이메일들을 바탕으로 카카오톡용 업무 브리핑을 한국어로 작성하세요.
 업무와 직접 관련 없는 메일, 보안알림, 뉴스레터, 홍보성 메일은 언급하지 마세요.
@@ -211,13 +209,21 @@ def summarize_emails(email_list: list[dict]) -> str:
 [이메일 목록]
 {_serialize_emails(email_list[:12])}
 """
-    response = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2,
-        max_tokens=1000,
-    )
-    return "📧 업무 메일 요약\n\n" + response.choices[0].message.content.strip()
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if api_key:
+        client = OpenAI(
+            api_key=api_key,
+            base_url=os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1/"),
+        )
+        response = client.chat.completions.create(
+            model=os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=800,
+        )
+        return "📧 업무 메일 요약\n\n" + response.choices[0].message.content.strip()
+
+    raise KeyError("ANTHROPIC_API_KEY")
 
 
 def build_customer_counts(email_list: list[dict]) -> list[str]:
